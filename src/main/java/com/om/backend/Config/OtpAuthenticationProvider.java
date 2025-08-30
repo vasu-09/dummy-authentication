@@ -31,24 +31,14 @@ public class OtpAuthenticationProvider implements AuthenticationProvider {
         String phone = (String) token.getPrincipal();
         String otp   = (String) token.getCredentials();
 
-        if (!otpService.validateOtp(phone, otp)) {
+        try{
+            otpService.verifyOtp(phone, otp); // ensures user exists
+        } catch (IllegalArgumentException ex) {
             throw new BadOtpException("Invalid or expired OTP");
         }
 
-        // Load or create domain user
-        User domainUser;
-        try {
-            domainUser = userService.getUser(phone); // returns com.om.backend.Model.User
-        } catch (UsernameNotFoundException e) {
-            // create a minimal user if not present
-            domainUser = userService.createUserWithPhone(phone); // see method below
-        }
-
-        // Either wrap directly:
-        // CustomUserDetails user = new CustomUserDetails(domainUser);
-
-        // Or, preferred: go through your UserDetailsService (ensures authorities/flags are consistent)
-        CustomUserDetails user = (CustomUserDetails) myUserDetailsService.loadUserByUsername(domainUser.getPhoneNumber());
+        // Load the user via UserDetailsService (user was created by OtpService if absent)
+        CustomUserDetails user = (CustomUserDetails) myUserDetailsService.loadUserByUsername(phone);
 
         var result = OtpAuthenticationToken.authenticated(user, user.getAuthorities());
         result.setDetails(authentication.getDetails());

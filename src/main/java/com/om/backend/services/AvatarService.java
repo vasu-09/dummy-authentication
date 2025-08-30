@@ -9,6 +9,7 @@ import com.om.backend.exceptions.BadRequestException;
 import com.om.backend.exceptions.ForbiddenException;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +23,10 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class AvatarService {
 
-    private final UserRepository userRepo;
-    private final MediaClient mediaClient; // your Feign/RestTemplate to RTC
+    @Autowired
+    private UserRepository userRepo;
+    @Autowired
+    private  MediaClient mediaClient; // your Feign/RestTemplate to RTC
 
     @Value("${media.bucket:moc-prod}")
     private String bucket;
