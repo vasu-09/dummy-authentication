@@ -32,10 +32,10 @@ public class PreKeyBundleService {
 
     /** Create or update identity + signed prekey (“meta”) for the user/device. */
     @Transactional
-    public void saveOrUpdateBundleForPhone(String phone, PreKeyBundleDto dto) {
-        var user = userRepo.findByPhoneNumber(phone)
-                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
-                        "User not found for phone: " + phone));
+    public void saveOrUpdateBundle(Long userId, PreKeyBundleDto dto) {
+        var user = userRepo.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "User not found for id: " + userId));
 
         int deviceId = dto.getDeviceId() == 0 ? 1 : dto.getDeviceId();
 
@@ -59,10 +59,10 @@ public class PreKeyBundleService {
 
     /** Upload a batch of one-time prekeys (preferred, separate endpoint). */
     @Transactional
-    public void uploadOneTimePreKeys(String phone, int deviceId, List<OneTimePreKeyDto> batch) {
-        var user = userRepo.findByPhoneNumber(phone)
-                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException(
-                        "User not found for phone: " + phone));
+    public void uploadOneTimePreKeys(Long userId, int deviceId, List<OneTimePreKeyDto> batch) {
+        var user = userRepo.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "User not found for id: " + userId));
         if (deviceId == 0) deviceId = 1;
 
         for (var k : batch) {

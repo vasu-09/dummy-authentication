@@ -1,5 +1,6 @@
 package com.om.backend.Config;
 
+import com.om.backend.services.CustomUserDetails;
 import com.om.backend.services.JWTService;
 import com.om.backend.services.MyUserDetailsService;
 import jakarta.servlet.FilterChain;
@@ -37,13 +38,13 @@ public class JwtFilter extends OncePerRequestFilter {
             token = authHeader.substring(7);
             phonenumber = jwtService.extractPhonenumber(token);
         }
-        if (phonenumber !=null && SecurityContextHolder.getContext().getAuthentication() ==null){
-
+        if (phonenumber != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             MyUserDetailsService userDetailsService = applicationContext.getBean(MyUserDetailsService.class);
             UserDetails userDetails = userDetailsService.loadUserByUsername(phonenumber);
-            if (jwtService.validToken(token, userDetails)){
+            if (jwtService.validToken(token, userDetails)) {
+                Long userId = ((CustomUserDetails) userDetails).getId();
                 UsernamePasswordAuthenticationToken authentoken =
-                        new UsernamePasswordAuthenticationToken(userDetails, null, List.of()); // No roles for now
+                        new UsernamePasswordAuthenticationToken(String.valueOf(userId), null, List.of()); // No roles for now
                 authentoken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentoken);
             }

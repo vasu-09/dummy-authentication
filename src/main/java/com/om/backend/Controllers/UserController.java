@@ -11,6 +11,7 @@ import com.om.backend.util.JwtIntrospection;
 import com.sun.security.auth.UserPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -51,6 +52,7 @@ public class UserController {
         Long uid = Long.valueOf(p.getName());
         return ResponseEntity.ok(userService.getPrivacy(uid));
     }
+
     @PutMapping("/me/privacy")
     public ResponseEntity<PrivacySettings> putPrivacy(Principal p, @RequestBody PrivacySettings body) {
         Long uid = Long.valueOf(p.getName());
@@ -61,16 +63,20 @@ public class UserController {
     @GetMapping("/me/sessions")
     public ResponseEntity<List<SessionDto>> listSessions(Principal p, HttpServletRequest req) {
         Long uid = Long.valueOf(p.getName());
-        String bearer = req.getHeader("Authorization");
+        String bearer = req.getHeader(HttpHeaders.AUTHORIZATION);
         String currentSid = JwtIntrospection.extractSid(bearer).orElse(null);
         return ResponseEntity.ok(sessionService.listSessions(uid, currentSid));
     }
+
     @DeleteMapping("/me/sessions/{sessionId}")
     public ResponseEntity<Void> logoutDevice(Principal p, @PathVariable String sessionId) {
         Long uid = Long.valueOf(p.getName());
         sessionService.revokeSession(uid, sessionId);
         return ResponseEntity.noContent().build();
     }
+
+    // --- Subscription ---
+
     @PostMapping("/me/sessions/logout")
     public ResponseEntity<Void> logoutCurrent(Principal p, HttpServletRequest req) {
         Long uid = Long.valueOf(p.getName());
@@ -83,7 +89,14 @@ public class UserController {
     @PostMapping("/me/devices")
     public ResponseEntity<Void> registerDevice(Principal p, @RequestBody RegisterDeviceDto dto) {
         Long uid = Long.valueOf(p.getName());
-        sessionService.registerOrUpdateDevice(uid, dto.sessionId, dto.fcmToken, dto.deviceModel, dto.appVersion, dto.platform);
+        // Ensure the session's FCM token is stored and last-seen timestamp updated
+        sessionService.registerOrUpdateDevice(
+                uid,
+                dto.getSessionId(),
+                dto.getFcmToken(),
+                dto.getDeviceModel(),
+                dto.getAppVersion(),
+                dto.getPlatform());
         return ResponseEntity.noContent().build();
     }
 

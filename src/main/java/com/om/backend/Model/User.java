@@ -24,10 +24,11 @@ public class User {
         private String email; // Optional, for recovery and notifications
         private String avatarUrl; // URL to the user's avatar image
         private boolean isActive; // Indicates if the user is active (if they are blocked or deactivated)
+        private boolean isPremium; // Indicates if the user has a premium subscription
         private Instant createdAt; // When the user registered
         private Instant updatedAt; // Last time the user information was updated
         @Column(length = 512)
-        private String avatarKey;          // e.g. "avatars/<userId>/v4/<hash>.jpg"
+        private String avatarKey;  // e.g. "avatars/<userId>/v4/<hash>.jpg"
 
         @Column
         private Instant avatarUpdatedAt;
@@ -113,7 +114,13 @@ public class User {
                 this.avatarUpdatedAt = avatarUpdatedAt;
         }
 
+        public boolean isPremium() {
+                return isPremium;
+        }
 
+        public void setPremium(boolean premium) {
+                isPremium = premium;
+        }
 
         public boolean isActive() {
                 return isActive;

@@ -1,81 +1,3 @@
-//package com.om.backend.services;
-//
-//import com.om.backend.Config.SmsProperties;
-//import com.om.backend.util.OtpMessageBuilder;
-//import com.om.backend.util.PhoneNumberUtil;
-//import com.om.backend.util.SmsClient;
-//import lombok.RequiredArgsConstructor;
-//
-//import org.apache.commons.lang.RandomStringUtils;
-//import org.springframework.beans.factory.annotation.Autowired;
-//import org.springframework.data.redis.core.StringRedisTemplate;
-//import org.springframework.stereotype.Service;
-//
-//import java.time.Duration;
-//
-//@Service
-//@RequiredArgsConstructor
-//public class OtpService {
-//    @Autowired
-//    private  StringRedisTemplate redis;
-//    private  SmsProperties props;
-//    private  SmsClient smsClient;
-//    private  OtpMessageBuilder messageBuilder;
-//
-//    /** Step 1: generate & send OTP via SMS */
-//    public void sendOtp(String rawPhone) {
-//        String phone = PhoneNumberUtil.toE164India(rawPhone);
-//        enforceRateLimits(phone);
-//
-//        String otp = RandomStringUtils.randomNumeric(props.getOtp().getDigits());
-//        redis.opsForValue().set(otpKey(phone), otp, Duration.ofMinutes(props.getOtp().getTtlMinutes()));
-//
-//        String msg = messageBuilder.build(otp);
-//        var res = smsClient.sendOtpMessage(msg, phone, true);
-//        if (!res.isOk()) {
-//            throw new RuntimeException("SMS send failed: " + res.getErrorDescription() + " (code " + res.getErrorCode() + ")");
-//        }
-//    }
-//
-//    /** Step 2: validate during AuthenticationProvider */
-//    public boolean validateOtp(String rawPhone, String providedOtp) {
-//        String phone = PhoneNumberUtil.toE164India(rawPhone);
-//        String key = otpKey(phone);
-//        String expected = redis.opsForValue().get(key);
-//        if (expected != null && expected.equals(providedOtp)) {
-//            redis.delete(key); // one-time use
-//            return true;
-//        }
-//        return false;
-//    }
-//
-//    private String otpKey(String e164Phone) { return "otp:" + e164Phone; }
-//
-//    private void enforceRateLimits(String e164Mobile) {
-//        // per-minute
-//        String pmKey = "otp:rl:1m:" + e164Mobile;
-//        Long pm = redis.opsForValue().increment(pmKey);
-//        if (pm != null && pm == 1) redis.expire(pmKey, Duration.ofMinutes(1));
-//        if (pm != null && pm > props.getOtp().getPerMinuteLimit()) {
-//            throw new RateLimitException("Too many OTP requests. Try again in a minute.");
-//        }
-//        // per-hour
-//        String phKey = "otp:rl:1h:" + e164Mobile;
-//        Long ph = redis.opsForValue().increment(phKey);
-//        if (ph != null && ph == 1) redis.expire(phKey, Duration.ofHours(1));
-//        if (ph != null && ph > props.getOtp().getPerHourLimit()) {
-//            throw new RateLimitException("Too many OTP requests. Try again later.");
-//        }
-//    }
-//
-//    public static class RateLimitException extends RuntimeException {
-//        public RateLimitException(String msg) { super(msg); }
-//    }
-//
-//
-//}
-
-
 
 /**
  * Handles OTP send/verify and mints JWTs by delegating to a JwtSigner bean.
@@ -148,7 +70,9 @@ public class OtpService {
 
     // ===================== SEND OTP =====================
 
-    /** Step 1: generate & send OTP via SMS (Redis + rate limits). */
+    /**
+     * Step 1: generate & send OTP via SMS (Redis + rate limits).
+     */
     @Transactional(noRollbackFor = RuntimeException.class)
     public void sendOtp(String rawPhone) {
         String phone = PhoneNumberUtil.toE164India(rawPhone);
@@ -157,7 +81,7 @@ public class OtpService {
         enforceRateLimits(phone);
 
         // 2) generate OTP using your config
-        int digits = Math.max(4, props.getOtp().getDigits());
+        int digits = props.getOtp().getDigits();
         String otp = RandomStringUtils.randomNumeric(digits);
 
         // 3) store OTP in Redis with TTL (overwrite any existing)
@@ -174,21 +98,15 @@ public class OtpService {
         }
 
         // Send via your SMS provider
-        String msg = messageBuilder.build(otp);
-        SendSmsResponse res = smsClient.sendOtpMessage(msg, phone, true);
-        if (!isOk(res)) {
-            String desc = (res != null && res.getErrorDescription() != null) ? res.getErrorDescription() : "unknown";
-            Integer code = (res != null) ? res.getErrorCode() : null;
+        SendSmsResponse res = smsClient.sendOtpMessage(messageBuilder.build(otp), phone, true);
+        if (res == null || !res.isOk()) {
+            String desc = res != null && res.getErrorDescription() != null ? res.getErrorDescription() : "unknown";
+            Integer code = res != null ? res.getErrorCode() : null;
             throw new RuntimeException("SMS send failed: " + desc + (code != null ? " (code " + code + ")" : ""));
         }
 
     }
 
-    private boolean isOk(SendSmsResponse r) {
-        if (r == null) return false;
-        Integer code = r.getErrorCode();
-        return (code == null || code == 0);
-    }
 
     // ===================== VERIFY OTP =====================
 
@@ -203,8 +121,15 @@ public class OtpService {
         // 1) fetch OTP from Redis
         String key = otpKey(phone);
         String expected = redis.opsForValue().get(key);
-        if (expected == null) {
-            // (Optional) backward-compat: if Redis missing, check DB audit row once
+        if (expected != null) {
+            // Redis path (preferred)
+            if (!otpCode.equals(expected)) {
+                throw new IllegalArgumentException("Invalid OTP");
+            }
+            // delete OTP (single-use)
+            redis.delete(key);
+        } else if (props.getOtp().isPersistForAudit()) {
+            // Optional DB fallback when auditing is enabled
             Optional<Otp> audit = otpRepo.findByPhone(phone);
             if (audit.isEmpty() || Instant.now(clock).isAfter(audit.get().getExpiredAt())) {
                 throw new IllegalArgumentException("OTP expired or not requested");
@@ -215,12 +140,8 @@ public class OtpService {
             // clear audit row if you want true single-use semantics
             otpRepo.delete(audit.get());
         } else {
-            // Redis path (preferred)
-            if (!otpCode.equals(expected)) {
-                throw new IllegalArgumentException("Invalid OTP");
-            }
-            // delete OTP (single-use)
-            redis.delete(key);
+            // No OTP found and no DB audit fallback configured
+            throw new IllegalArgumentException("OTP expired or not requested");
         }
 
         // 2) resolve/create user
@@ -238,12 +159,16 @@ public class OtpService {
 
     // ===================== TOKEN MINTING =====================
 
-    /** Mint a short-lived access token (must include 'sid' = sessionId). */
+    /**
+     * Mint a short-lived access token (must include 'sid' = sessionId).
+     */
     public String mintAccessToken(Long userId, String sessionId) {
         return jwtSigner.signAccessToken(userId, sessionId);
     }
 
-    /** Mint a long-lived refresh token (recommended to include 'sid' = sessionId). */
+    /**
+     * Mint a long-lived refresh token (recommended to include 'sid' = sessionId).
+     */
     public String mintRefreshToken(Long userId, String sessionId) {
         return jwtSigner.signRefreshToken(userId, sessionId);
     }
@@ -259,19 +184,19 @@ public class OtpService {
         return "otp:rl:minute:" + phone;
     }
 
-    private String rlDailyKey(String phone) {
-        return "otp:rl:day:" + phone;
+    private String rlHourlyKey(String phone) {
+        return "otp:rl:hour:" + phone;
     }
 
     /**
      * Basic dual-window rate limiting:
-     *  - per-minute: e.g., 1–3 sends
-     *  - per-day:    e.g., 5–10 sends
+     * - per-minute: e.g., 1–3 sends
+     * - per-day:    e.g., 5–10 sends
      * These thresholds come from SmsProperties.
      */
     private void enforceRateLimits(String phone) {
-        int perMinute = props.getOtp().getPerMinuteLimit(); // e.g., 2
-        int perDay    = props.getOtp().getPerHourLimit();    // e.g., 10
+        int perMinute = props.getOtp().getPerMinuteLimit();
+        int perHour = props.getOtp().getPerHourLimit();
 
         // minute window (60s)
         Long minuteCount = redis.opsForValue().increment(rlMinuteKey(phone));
@@ -283,18 +208,21 @@ public class OtpService {
         }
 
         // daily window (24h)
-        Long dayCount = redis.opsForValue().increment(rlDailyKey(phone));
-        if (dayCount != null && dayCount == 1L) {
-            redis.expire(rlDailyKey(phone), 24, TimeUnit.HOURS);
+        Long hourCount = redis.opsForValue().increment(rlHourlyKey(phone));
+        if (hourCount != null && hourCount > perHour) {
+            throw new IllegalStateException("Too many OTP requests. Try again later.");
         }
-        if (dayCount != null && dayCount > perDay) {
-            throw new IllegalStateException("Daily OTP limit exceeded.");
+        if (hourCount != null && hourCount > perHour) {
+                throw new IllegalStateException("Too many OTP requests. Try again later.");
+            }
         }
-    }
 
-    /** Minimal signer abstraction expected to be provided elsewhere in your app. */
+        /** Minimal signer abstraction expected to be provided elsewhere in your app. */
+
+
     public interface JwtSigner {
         String signAccessToken(Long userId, String sessionId);
+
         String signRefreshToken(Long userId, String sessionId);
     }
 }

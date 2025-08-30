@@ -19,8 +19,8 @@ public class SmsDlrController {
             @RequestParam(required = false) String errorCode,
             @RequestParam(required = false) String shortMessage
     ) {
-        log.info("DLR: id={} mobile={} status={} submit={} done={} err={} msg={}",
-                messageId, mobile, status, submitDate, doneDate, errorCode, shortMessage);
+                // Avoid logging PII/OTP content. Only log high-level delivery status.
+                log.info("DLR received: id={} status={} error={}", messageId, status, errorCode);
         return "OK";
     }
 }

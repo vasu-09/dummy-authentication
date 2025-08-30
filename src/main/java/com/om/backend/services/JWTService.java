@@ -3,10 +3,7 @@ package com.om.backend.services;
 
 import com.om.backend.Config.JwtConfig;
 import io.jsonwebtoken.Claims;
-
 import io.jsonwebtoken.Jwts;
-
-import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -29,7 +26,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 @Service
-public class JWTService {
+public class JWTService implements OtpService.JwtSigner {
 
     private final JwtConfig cfg;
     private final RSAPrivateKey privateKey;
@@ -186,6 +183,45 @@ public class JWTService {
                 .replaceAll("\\s", "");
         if (p.isEmpty()) throw new IllegalArgumentException("Empty PEM " + type);
         return p;
+    }
+
+    @Override
+    public String signAccessToken(Long userId, String sessionId) {
+        Instant now = Instant.now();
+        Instant exp = now.plus(Duration.ofMinutes(cfg.getAccessTtlMin()));
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("sid", sessionId);
+
+        return Jwts.builder()
+                .header().keyId(cfg.getKid()).and()
+                .claims().add(claims).and()
+                .subject(String.valueOf(userId))
+                .issuer(cfg.getIssuer())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(exp))
+                .signWith(privateKey, Jwts.SIG.RS256)
+                .compact();
+    }
+
+    @Override
+    public String signRefreshToken(Long userId, String sessionId) {
+        Instant now = Instant.now();
+        Instant exp = now.plus(Duration.ofDays(cfg.getRefreshTtlDays()));
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sid", sessionId);
+
+        return Jwts.builder()
+                .header().keyId(cfg.getKid()).and()
+                .claims().add(claims).and()
+                .subject(String.valueOf(userId))
+                .issuer(cfg.getIssuer())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(exp))
+                .signWith(privateKey, Jwts.SIG.RS256)
+                .compact();
     }
 }
 

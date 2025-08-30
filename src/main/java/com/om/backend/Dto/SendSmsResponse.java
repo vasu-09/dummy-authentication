@@ -1,60 +1,28 @@
 package com.om.backend.Dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import java.util.List;
 
 /** Map to your provider’s JSON schema (typical pattern below). */
 @Data
 public class SendSmsResponse {
-    private int ErrorCode;
-    private String ErrorDescription;
-    private List<DataItem> Data;
-
-    public int getErrorCode() {
-        return ErrorCode;
-    }
-
-    public void setErrorCode(int errorCode) {
-        ErrorCode = errorCode;
-    }
-
-    public String getErrorDescription() {
-        return ErrorDescription;
-    }
-
-    public void setErrorDescription(String errorDescription) {
-        ErrorDescription = errorDescription;
-    }
-
-    public List<DataItem> getData() {
-        return Data;
-    }
-
-    public void setData(List<DataItem> data) {
-        Data = data;
-    }
-
+    @JsonProperty("ErrorCode")
+    private Integer errorCode;
+    @JsonProperty("ErrorDescription")
+    private String errorDescription;
+    @JsonProperty("Data")
+    private List<DataItem> data;
     @Data
     public static class DataItem {
-        private String MobileNumber;
-        private String MessageId;
-
-        public String getMobileNumber() {
-            return MobileNumber;
-        }
-
-        public void setMobileNumber(String mobileNumber) {
-            MobileNumber = mobileNumber;
-        }
-
-        public String getMessageId() {
-            return MessageId;
-        }
-
-        public void setMessageId(String messageId) {
-            MessageId = messageId;
-        }
+        @JsonProperty("MobileNumber")
+        private String mobileNumber;
+        @JsonProperty("MessageId")
+        private String messageId;
     }
 
-    public boolean isOk() { return ErrorCode == 0; }
+
+    public boolean isOk() {
+        return errorCode == null || errorCode == 0;
+    }
 }

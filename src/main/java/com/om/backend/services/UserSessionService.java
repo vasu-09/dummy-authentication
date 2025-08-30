@@ -6,12 +6,12 @@ import com.om.backend.Model.UserSession;
 import com.om.backend.Repositories.UserSessionRepository;
 
 import com.om.backend.util.JwtIntrospection;
+import com.om.backend.util.Hashes;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -71,7 +71,7 @@ public class UserSessionService {
     public void bindRefreshToken(Long userId, String sessionId, String refreshJwtRaw) {
         UserSession s = sessionRepo.findById(sessionId).orElseThrow();
         if (!s.getUserId().equals(userId)) throw new IllegalArgumentException("Not your session");
-        s.setRefreshTokenHash(sha256(refreshJwtRaw));
+        s.setRefreshTokenHash(Hashes.sha256(refreshJwtRaw));
         s.setRefreshJti(JwtIntrospection.extractJti(refreshJwtRaw).orElse(null));
         var exp = JwtIntrospection.extractExp(refreshJwtRaw).orElse(null); // seconds since epoch
         s.setRefreshExpiresAt(exp == null ? null : Instant.ofEpochSecond(exp));
@@ -84,10 +84,10 @@ public class UserSessionService {
         UserSession s = sessionRepo.findById(sessionId).orElseThrow();
         if (!s.getUserId().equals(userId)) throw new IllegalArgumentException("Not your session");
         byte[] expected = s.getRefreshTokenHash();
-        if (expected == null || !java.util.Arrays.equals(expected, sha256(oldRefreshJwtRaw))) {
+         if (expected == null || !java.util.Arrays.equals(expected, Hashes.sha256(oldRefreshJwtRaw))) {
             throw new IllegalArgumentException("Invalid refresh token");
         }
-        s.setRefreshTokenHash(sha256(newRefreshJwtRaw));
+        s.setRefreshTokenHash(Hashes.sha256(newRefreshJwtRaw));
         s.setRefreshJti(JwtIntrospection.extractJti(newRefreshJwtRaw).orElse(null));
         var exp = JwtIntrospection.extractExp(newRefreshJwtRaw).orElse(null);
         s.setRefreshExpiresAt(exp == null ? null : Instant.ofEpochSecond(exp));
@@ -125,6 +125,7 @@ public class UserSessionService {
             s.setRefreshTokenHash(null);
             s.setRefreshJti(null);
             s.setRefreshExpiresAt(null);
+            s.setRefreshRotatedAt(Instant.now());
             sessionRepo.save(s);
         }
     }
@@ -136,13 +137,5 @@ public class UserSessionService {
         revokeSession(userId, sid);
     }
 
-    // -------- helpers --------
-    private static byte[] sha256(String s) {
-        try {
-            MessageDigest d = MessageDigest.getInstance("SHA-256");
-            return d.digest(s.getBytes(StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        }
-    }
+
 }

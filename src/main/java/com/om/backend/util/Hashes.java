@@ -1,6 +1,5 @@
 package com.om.backend.util;
 
-import java.util.Optional;
 
 public final class Hashes {
     public static byte[] sha256(String s) {

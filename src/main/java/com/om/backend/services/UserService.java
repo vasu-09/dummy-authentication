@@ -185,6 +185,7 @@ public class UserService {
         User u = userRepo.findById(userId).orElseThrow();
         u.setNotificationPrefs(in);
         u.setPrefsUpdatedAt(Instant.now());
+        userRepo.save(u);
         return u.getNotificationPrefs();
     }
 
@@ -205,12 +206,17 @@ public class UserService {
     // -------- Per-chat mute (user × chat) --------
     @Transactional
     public Instant setChatMute(Long userId, Long chatId, Instant mutedUntil) {
-        UserChatPrefs p = ucpRepo.findByUserIdAndChatId(userId, chatId).orElse(null);
-        if (p == null) {
-            p = new UserChatPrefs();
-            p.setUserId(userId);
-            p.setChatId(chatId);
+        if (mutedUntil == null) {
+            ucpRepo.deleteByUserIdAndChatId(userId, chatId);
+            return null;
         }
+
+        UserChatPrefs p = ucpRepo.findByUserIdAndChatId(userId, chatId).orElseGet(() -> {
+            UserChatPrefs x = new UserChatPrefs();
+            x.setUserId(userId);
+            x.setChatId(chatId);
+            return x;
+        });
         p.setMutedUntil(mutedUntil);
         ucpRepo.save(p);
         return mutedUntil;
@@ -257,6 +263,8 @@ public class UserService {
     public ResponseEntity<List<String>> getPhoneNumbersByIds(List<Long> id) {
         return new ResponseEntity<>(userRepo.findPhoneNumbersByIds(id), HttpStatus.OK);
     }
+
+
 
 
 }
